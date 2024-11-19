@@ -11,14 +11,13 @@
 #define PWM 10
 
 //Assign DC Motor Max and Min Outputs
-#define MAX 10
-#define MIN -10
+#define MAX_MOTOR 50
 
 //create and set input, setpoint, output, and PID parameters
-double PendAngle;
-double PendSet = 0;
-double PosOut;
-double Kp = 0, Ki = 0, Kd = 0;
+double PendAngle = 0.0;
+double PendSet = 0.0;
+double PosOut = 0.0;
+double Kp = 25, Ki = 0, Kd = 2;
 
 //Encoder and PID Control
 Encoder Enc(A,B);
@@ -36,7 +35,7 @@ pinMode(PWM, OUTPUT);
 
 //Initialize PID and set output limits
 sysPID.SetMode(AUTOMATIC);
-sysPID.SetOutputLimits(MIN,MAX);
+sysPID.SetOutputLimits(-5,5);
 
 }
 
@@ -45,21 +44,24 @@ void loop() {
 long count = Enc.read();
 PendAngle = count * 0.15;
 
+Serial.println(count);
+Serial.println(PendAngle);
+
 //PID Computation
 sysPID.Compute();
-
+double PWM_Out = map(abs(PosOut), 0, 5, 0, 50);
 //Move motor to the right 
 if (PosOut > 0) {
     digitalWrite(D1, HIGH);
     digitalWrite(D2, LOW);
-    analogWrite(PWM, abs(PosOut));
+    analogWrite(PWM, PWM_Out);
   } 
 
 //Move motor to the left
 else if (PosOut < 0) {
     digitalWrite(D1, LOW);
     digitalWrite(D2, HIGH);
-    analogWrite(PWM, abs(PosOut));
+    analogWrite(PWM, PWM_Out);
   } 
 
 //Stop motor
