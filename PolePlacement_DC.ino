@@ -10,12 +10,11 @@
 #define PWM 10
 
 //Assign DC Motor Max and Min Outputs
-#define MAX 10
-#define MIN -10
+#define MAX 50
 
 //System Dynamics Matrix, Control Matrix, and Position Initialization
-double x[4] = {0.0, 0.0, 0.0, 0.0};
-double K[4] = {5.0, 5.0, 5.0, 5.0};
+double x1 = 0.0, x2 = 0.0, x3 = 0.0, x4 = 0.0;
+double K[] = {1.0, 0.0, 0.0, 0.0};
 double PosOut = 0.0;
 
 //Initialize Variables For Loop
@@ -40,38 +39,43 @@ pinMode(PWM, OUTPUT);
 void loop() {
 //Determine current time and time difference since last time recorded
 unsigned long Time = millis();
-double dt = (Time - lastTime)/1000;
+double dt = (Time - lastTime)/1000.0;
 lastTime = Time;
 
 //Read Encoder and calculate state values based on Encoder count
 long count = Enc.read();
-x[0] = count * 0.15;
-x[1] = (x[0]-lastAngle)/dt;
-x[2] = count * (//gear ratio * steps);
-x[3] = (x[2]-lastPos)/dt;
+x1 = count * 0.15;
+Serial.println(x1);
+x2 = (x1-lastAngle)/dt;
+Serial.println(x2);
+x3 = count * (10);
+Serial.println(x3);
+x4 = (x3-lastPos)/dt;
+Serial.println(x4);
+
 
 //Update temporary variables
-lastAngle = x[0];
-lastPos = x[2];
+lastAngle = x1;
+lastPos = x3;
 
 //Output Position Computation
-for (int i = 0; i < 4; i++) {
-    PosOut += x[i] * -K[i];
-  }
-PosOut= constrain(u, -255, 255);
+PosOut = -1*(K[0]*x1 + K[1]*x2 +K[2]*x3 + K[3]*x4);
+//Serial.println(PosOut);
+PosOut = constrain(PosOut, -5, 5);
+double PWM_Out = map(abs(PosOut), 0, 5, 0, 50);
 
 //Move motor to the right 
 if (PosOut > 0) {
     digitalWrite(D1, HIGH);
     digitalWrite(D2, LOW);
-    analogWrite(PWM, abs(PosOut));
+    analogWrite(PWM, abs(PWM_Out));
   } 
 
 //Move motor to the left
 else if (PosOut < 0) {
     digitalWrite(D1, LOW);
     digitalWrite(D2, HIGH);
-    analogWrite(PWM, abs(PosOut));
+    analogWrite(PWM, abs(PWM_Out));
   } 
 
 //Stop motor
