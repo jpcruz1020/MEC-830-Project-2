@@ -24,11 +24,8 @@
 #define ECHO 13
 
 //Assign DC Motor Max and Min Outputs
-#define MAX_MOTOR 50
-
-//ESTOP State Tracking
-bool ESTOP_STATE = false;
-
+#define MAX_MOTOR 250
+#define PIDLIM 50
 //Toggle State Tracking
 int TOGGLE_STATUS = 1;
 int ESTOP_STATUS = 1;
@@ -40,7 +37,7 @@ bool toggleWasOff = false;
 double PendAngle = 0.0;
 double PendSet = 0.0;
 double PosOut = 0.0;
-double Kp = 4.0, Ki = 0.0, Kd = 0.0;
+double Kp = 9.0, Ki = 0.0, Kd = 1;
 
 //Encoder and PID Control
 Encoder Enc(A,B);
@@ -50,7 +47,7 @@ void setup() {
 
 Serial.begin(9600);
 
-Enc.write(0); //Current Angle is reference
+Enc.write(-1200); //Current Angle is reference
 
 //Motor Pins
 pinMode(D1, OUTPUT);
@@ -76,14 +73,14 @@ pinMode(ECHO, INPUT);
 
 //Initialize PID and set output limits
 sysPID.SetMode(AUTOMATIC);
-sysPID.SetOutputLimits(-5,5);
+sysPID.SetOutputLimits(-PIDLIM,PIDLIM);
 
 
 }
 
 
 
-
+const double DEAD_ZONE = 2.0;
 
 void loop() {
 
@@ -133,8 +130,13 @@ bool ENC_REF = false;
         //PID Computation
     sysPID.Compute();
 
+    if (abs(PendAngle - PendSet) <= DEAD_ZONE && abs(PosOut) < 5.0) {
+      stop_motor();
+      return;
+    }
+
     //Serial.println(PosOut);
-    double PWM_Out = map(abs(PosOut), 0, 5, 0, 180);
+    double PWM_Out = constrain(map(abs(PosOut), 0, PIDLIM, 0, MAX_MOTOR), 0, MAX_MOTOR);
     //Move motor to the right 
     if (PosOut > 0) {
         move_left(PWM_Out);
@@ -145,13 +147,11 @@ bool ENC_REF = false;
         move_right(PWM_Out);
       } 
 
-    //Stop motor
-    else {
-        stop_motor();
-      }
+    // else {
+    //     stop_motor();
+    // }
 
-
-    delay(100);
+    delay(20);
   } else if (TOGGLE_STATUS == HIGH){
         //Turn OFF All Components
         digitalWrite(LED_POWER, LOW);
