@@ -6,9 +6,9 @@
 #define B 3
 
 //Assign LEDs
-#define LED_POWER 4
-#define LED_PID 5
-#define LED_POLE 6
+#define LED_POWER 6
+#define LED_PID 4
+#define LED_POLE 5
 
 //Assign switches
 #define TOGGLE 7
@@ -26,11 +26,14 @@
 //Assign DC Motor Max and Min Outputs
 #define MAX_MOTOR 50
 
+//ESTOP State Tracking
+bool ESTOP_STATE = false;
+
 //create and set input, setpoint, output, and PID parameters
 double PendAngle = 0.0;
 double PendSet = 0.0;
 double PosOut = 0.0;
-double Kp = 25, Ki = 0, Kd = 2;
+double Kp = 5, Ki = 0.0, Kd = 2.0;
 
 //Encoder and PID Control
 Encoder Enc(A,B);
@@ -50,10 +53,13 @@ pinMode(PWM, OUTPUT);
 pinMode(LED_POWER, OUTPUT);
 pinMode(LED_PID, OUTPUT);
 pinMode(LED_POLE, OUTPUT);
+digitalWrite(LED_POWER, LOW);
+digitalWrite(LED_PID, LOW);
+digitalWrite(LED_POLE, LOW);
 
 //Initialzie Switches
-pinMode(TOGGLE, INPUT);
-pinMode(ESTOP, INPUT);
+pinMode(TOGGLE, INPUT_PULLUP);
+pinMode(ESTOP, INPUT_PULLUP);
 
 //Initialzie Ultrasonic Sensor
 pinMode(TRIG, OUTPUT);
@@ -65,16 +71,45 @@ sysPID.SetOutputLimits(-5,5);
 
 }
 
+bool isSystemStopped = false;
+bool toggleWasOff = false;
 void loop() {
-//Check ESTOP State
-if(ESTOP == LOW){
 
-  //Check TOGGLE State
-  while(TOGGLE == HIGH){
+int TOGGLE_STATUS = digitalRead(TOGGLE);
+int ESTOP_STATUS = digitalRead(ESTOP);
+
+// Check if ESTOP is pressed
+  if (ESTOP_STATUS == LOW) {
+    // Latch the system off
+    isSystemStopped = true;
+
+    // Turn off all system components
+    digitalWrite(LED_POWER, LOW);
+    digitalWrite(LED_PID, LOW);
+    digitalWrite(D1, LOW);
+    digitalWrite(D2, LOW);
+
+    Serial.println("System is OFF (ESTOP activated).");
+  }
+
+// If the system is latched as stopped, check for toggle reset
+  if (isSystemStopped) {
+    if (TOGGLE_STATUS == HIGH) {
+      toggleWasOff = true;
+    } else if (TOGGLE_STATUS == LOW && toggleWasOff) {
+      isSystemStopped = false;
+      toggleWasOff = false;
+      Serial.println("System Reset via Toggle.");
+    }
+    return;
+  }
+
+//Check TOGGLE State
+  if(TOGGLE_STATUS == LOW){
 //Measure cart postion using ultrasonic sensor
 double distance = DistMeas();
 
-if((distance <= 40 || distance >= 10) && (PendAngle <= -45 || PendAngle >= 45)){
+// if((distance <= 40 || distance >= 10) && (PendAngle <= -45 || PendAngle >= 45)){
 //Turn on LEDs
 digitalWrite(LED_POWER, HIGH);
 digitalWrite(LED_PID, HIGH);
@@ -83,23 +118,24 @@ digitalWrite(LED_PID, HIGH);
 long count = Enc.read();
 PendAngle = count * 0.15;
 
-Serial.println(count);
-Serial.println(PendAngle);
+// Serial.println(PendAngle);
 
 //PID Computation
 sysPID.Compute();
-double PWM_Out = map(abs(PosOut), 0, 5, 0, 50);
+
+//Serial.println(PosOut);
+double PWM_Out = map(abs(PosOut), 0, 5, 0, 150);
 //Move motor to the right 
 if (PosOut > 0) {
-    digitalWrite(D1, HIGH);
-    digitalWrite(D2, LOW);
+    digitalWrite(D1, LOW);
+    digitalWrite(D2, HIGH);
     analogWrite(PWM, PWM_Out);
   } 
 
 //Move motor to the left
 else if (PosOut < 0) {
-    digitalWrite(D1, LOW);
-    digitalWrite(D2, HIGH);
+    digitalWrite(D1, HIGH);
+    digitalWrite(D2, LOW);
     analogWrite(PWM, PWM_Out);
   } 
 
@@ -109,24 +145,18 @@ else {
     digitalWrite(D2, LOW);
     analogWrite(PWM, 0);
   }
-delay(50);
-}
-
-else {
+delay(100);
+} else if (TOGGLE_STATUS == HIGH){
+  digitalWrite(LED_POWER, LOW);
+  digitalWrite(LED_PID, LOW);
   digitalWrite(D1, LOW);
   digitalWrite(D2, LOW);
   analogWrite(PWM, 0);
-  return;
-}
-    }
+  }
 
-}
 
-else{
-//Break from loop
-return;
-}
-}
+ }
+
 
 int DistMeas() {
   digitalWrite(TRIG, LOW);
